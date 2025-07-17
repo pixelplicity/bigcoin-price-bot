@@ -466,7 +466,7 @@ async function updateChannel(
           permissionOverwrites: [
             {
               id: client.user!.id,
-              allow: ['ViewChannel', 'ManageChannels']
+              allow: ['ViewChannel', 'ManageChannels', 'Connect']
             }
           ]
         });
