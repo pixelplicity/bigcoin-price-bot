@@ -483,16 +483,6 @@ async function updateChannel(
     } else {
       // Update existing channel
       try {
-        // Check if channel is manageable (should be manageable if created correctly)
-        if (channel && !channel.manageable) {
-          debug(
-            `Channel not manageable in ${guild.name}, this shouldn't happen with new channels. Removing from Redis and recreating...`
-          );
-          await removeChannelId(guildId);
-          channel = null; // This will trigger channel recreation
-        }
-
-        // If channel was deleted, it will be recreated in the next section
         if (channel) {
           // Only update name if it's different
           if (channel.name !== value) {
