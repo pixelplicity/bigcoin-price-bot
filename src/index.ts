@@ -278,12 +278,39 @@ async function updateChannel(
   try {
     const guild = await client.guilds.fetch(guildId);
 
-    // Check bot permissions
+    // Comprehensive bot permissions check
     const botMember = await guild.members.fetch(client.user!.id);
     const permissions = botMember.permissions;
 
+    console.log(`Checking permissions for bot in ${guild.name}:`);
+    console.log(`- ManageChannels: ${permissions.has('ManageChannels')}`);
+    console.log(`- ViewChannel: ${permissions.has('ViewChannel')}`);
+    console.log(`- ManageRoles: ${permissions.has('ManageRoles')}`);
+    console.log(`- Bot role position: ${botMember.roles.highest.position}`);
+
     if (!permissions.has('ManageChannels')) {
-      console.error(`Bot missing ManageChannels permission in ${guild.name}`);
+      console.error(
+        `Bot missing ManageChannels permission in ${guild.name}. Cannot update channels.`
+      );
+      return;
+    }
+
+    // Check if bot has permission to manage the specific channel type
+    if (!permissions.has('ViewChannel')) {
+      console.error(
+        `Bot missing ViewChannel permission in ${guild.name}. Cannot view channels.`
+      );
+      return;
+    }
+
+    // Check bot's role hierarchy position
+    const botRolePosition = botMember.roles.highest.position;
+    console.log(`Bot's highest role position: ${botRolePosition}`);
+
+    if (botRolePosition === 0) {
+      console.error(
+        `Bot has no roles in ${guild.name}. Cannot manage channels.`
+      );
       return;
     }
 
@@ -298,9 +325,16 @@ async function updateChannel(
       console.log(
         `Successfully fetched channel group ${channelGroup.name} (${channelGroup.id}) in ${guild.name}`
       );
+
+      // Verify the channel group is actually a category
+      if (channelGroup.type !== ChannelType.GuildCategory) {
+        throw new Error(
+          `Channel group is not a category: ${channelGroup.type}`
+        );
+      }
     } catch (error) {
       console.error(
-        `Failed to fetch channel group ${channelGroupId} in ${guild.name}, recreating...`
+        `Failed to fetch channel group ${channelGroupId} in ${guild.name}, recreating... Error: ${error}`
       );
       await removeChannelGroupId(guildId);
       const newChannelGroupId = await createChannelGroup(guildId);
@@ -326,7 +360,36 @@ async function updateChannel(
     // If we have a stored channel ID, try to fetch it
     if (channelId) {
       try {
-        channel = (await guild.channels.fetch(channelId)) as VoiceChannel;
+        const fetchedChannel = await guild.channels.fetch(channelId);
+        if (!fetchedChannel) {
+          console.log(
+            `Stored ${channelType} channel not found in ${guild.name}, will create new one`
+          );
+          channelId = undefined;
+          await removeChannelId(guildId);
+        } else {
+          console.log(
+            `Successfully fetched ${channelType} channel: ${fetchedChannel.name} (${fetchedChannel.id}) in ${guild.name}`
+          );
+          console.log(`- Channel type: ${fetchedChannel.type}`);
+          console.log(`- Current parent: ${fetchedChannel.parentId}`);
+          console.log(`- Target parent: ${channelGroup.id}`);
+
+          if ('position' in fetchedChannel) {
+            console.log(`- Current position: ${fetchedChannel.position}`);
+          }
+          console.log(`- Target position: ${position}`);
+
+          if (fetchedChannel.type !== ChannelType.GuildVoice) {
+            console.error(
+              `Stored ${channelType} channel is not a voice channel: ${fetchedChannel.type}`
+            );
+            await removeChannelId(guildId);
+            channelId = undefined;
+          } else {
+            channel = fetchedChannel as VoiceChannel;
+          }
+        }
       } catch (error) {
         console.log(
           `Stored ${channelType} channel not found in ${guild.name}, will create new one`
@@ -348,6 +411,10 @@ async function updateChannel(
             {
               id: guild.roles.everyone.id,
               deny: ['Connect', 'ViewChannel', 'Speak', 'Stream']
+            },
+            {
+              id: client.user!.id,
+              allow: ['ManageChannels', 'ViewChannel']
             }
           ]
         });
@@ -364,17 +431,63 @@ async function updateChannel(
     } else {
       // Update existing channel
       try {
+        // Check if channel is manageable
+        if (!channel.manageable) {
+          console.log(
+            `Channel not manageable in ${guild.name}, attempting to fix permissions...`
+          );
+          try {
+            await channel.permissionOverwrites.create(client.user!.id, {
+              ManageChannels: true,
+              ViewChannel: true
+            });
+            console.log(
+              `Successfully updated permissions for ${channelType} channel in ${guild.name}`
+            );
+          } catch (permError) {
+            console.error(
+              `Failed to update permissions for ${channelType} channel in ${guild.name}:`,
+              permError
+            );
+            return;
+          }
+        }
+
         // Only update name if it's different
         if (channel.name !== value) {
-          await channel.setName(value);
+          console.log(
+            `Updating ${channelType} channel name from "${channel.name}" to "${value}" in ${guild.name}`
+          );
+          try {
+            await channel.setName(value);
+            console.log(
+              `Successfully updated ${channelType} channel name in ${guild.name}`
+            );
+          } catch (nameError) {
+            console.error(
+              `Failed to update ${channelType} channel name in ${guild.name}:`,
+              nameError
+            );
+            return; // Don't continue with other operations if name update fails
+          }
+        } else {
+          console.log(
+            `${channelType} channel name already correct in ${guild.name}`
+          );
         }
 
         // Only move to category if it's different and category exists
         if (channel.parentId !== channelGroup.id) {
+          console.log(
+            `Moving ${channelType} channel from parent ${channel.parentId} to ${channelGroup.id} in ${guild.name}`
+          );
           try {
             await channel.edit({
               parent: channelGroup.id
             });
+            console.log(
+              `Successfully moved ${channelType} channel to category in ${guild.name}`
+            );
           } catch (moveError) {
             console.error(
               `Failed to move ${channelType} channel to category in ${guild.name}:`,
@@ -382,14 +495,24 @@ async function updateChannel(
             );
             // Continue without moving the channel
           }
+        } else {
+          console.log(
+            `${channelType} channel already in correct category in ${guild.name}`
+          );
         }
 
         // Only update position if it's different
         if (channel.position !== position) {
+          console.log(
+            `Updating ${channelType} channel position from ${channel.position} to ${position} in ${guild.name}`
+          );
           try {
             await channel.edit({
               position: position
             });
+            console.log(
+              `Successfully updated ${channelType} channel position in ${guild.name}`
+            );
           } catch (positionError) {
             console.error(
               `Failed to update ${channelType} channel position in ${guild.name}:`,
@@ -397,6 +520,10 @@ async function updateChannel(
             );
             // Continue without updating position
           }
+        } else {
+          console.log(
+            `${channelType} channel already in correct position in ${guild.name}`
+          );
         }
       } catch (editError) {
         console.error(
