@@ -462,7 +462,13 @@ async function updateChannel(
           name: value,
           type: ChannelType.GuildVoice,
           parent: channelGroup.id,
-          position: position
+          position: position,
+          permissionOverwrites: [
+            {
+              id: client.user!.id,
+              allow: ['ViewChannel', 'ManageChannels']
+            }
+          ]
         });
 
         await setChannelId(guildId, newChannel.id);
