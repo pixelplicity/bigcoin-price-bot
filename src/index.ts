@@ -45,7 +45,16 @@ const formatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 4
 });
 
-function formatNumber(number: number) {
+function debug(...args: any[]) {
+  if (process.env.LOG_DEBUG === 'true') {
+    console.log(...args);
+  }
+}
+
+function formatNumber(number: number | null | undefined) {
+  if (number === null || number === undefined) {
+    return '0';
+  }
   return number.toLocaleString('en-US', {
     maximumFractionDigits: 2,
     notation: 'compact',
@@ -57,13 +66,35 @@ async function getStats(): Promise<{
   price: number;
   blocksUntilHalving: number;
 }> {
-  const response = await axios.get<StatsResponse>(
-    'https://bigpool.tech/api/stats/global'
-  );
-  return {
-    price: response.data.bigPrice,
-    blocksUntilHalving: response.data.blocksUntilHalving
-  };
+  try {
+    const response = await axios.get<StatsResponse>(
+      'https://bigpool.tech/api/stats/global'
+    );
+
+    // Validate the response data
+    if (
+      !response.data ||
+      typeof response.data.bigPrice !== 'number' ||
+      typeof response.data.blocksUntilHalving !== 'number'
+    ) {
+      console.error('Invalid response data from API:', response.data);
+      return {
+        price: 0,
+        blocksUntilHalving: 0
+      };
+    }
+
+    return {
+      price: response.data.bigPrice,
+      blocksUntilHalving: response.data.blocksUntilHalving
+    };
+  } catch (error) {
+    console.error('Failed to fetch stats from API:', error);
+    return {
+      price: 0,
+      blocksUntilHalving: 0
+    };
+  }
 }
 
 async function getGuilds(): Promise<string[]> {
@@ -203,22 +234,31 @@ async function ensureChannelGroupExists(guildId: string): Promise<string> {
 }
 
 async function removeChannelGroup(guildId: string) {
-  const guild = await client.guilds.fetch(guildId);
-  const id = await getChannelGroupId(guildId);
-  if (id) {
-    try {
-      const channelGroup = await guild.channels.fetch(id);
-      if (channelGroup) {
-        await channelGroup.delete();
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    const id = await getChannelGroupId(guildId);
+    if (id) {
+      try {
+        const channelGroup = await guild.channels.fetch(id);
+        if (channelGroup) {
+          await channelGroup.delete();
+        }
+      } catch (error) {
+        console.log(
+          `Channel group already deleted or not found in ${guild.name}`
+        );
       }
-    } catch (error) {
-      console.log(
-        `Channel group already deleted or not found in ${guild.name}`
-      );
+      await removeChannelGroupId(guildId);
     }
-    await removeChannelGroupId(guildId);
+    console.log(`Removed channel group in ${guild.name}`);
+  } catch (error: any) {
+    if (error.code === 10004) {
+      console.log(`Guild ${guildId} no longer exists, cleaning up Redis data`);
+      await removeChannelGroupId(guildId);
+    } else {
+      console.error(`Error removing channel group in ${guildId}:`, error);
+    }
   }
-  console.log(`Removed channel group in ${guild.name}`);
 }
 
 async function removePriceChannel(guildId: string) {
@@ -240,8 +280,13 @@ async function removePriceChannel(guildId: string) {
       }
       await removePriceChannelId(guildId);
     }
-  } catch (error) {
-    console.error(`Error removing price channel in ${guildId}: ${error}`);
+  } catch (error: any) {
+    if (error.code === 10004) {
+      console.log(`Guild ${guildId} no longer exists, cleaning up Redis data`);
+      await removePriceChannelId(guildId);
+    } else {
+      console.error(`Error removing price channel in ${guildId}: ${error}`);
+    }
   }
 }
 
@@ -264,8 +309,13 @@ async function removeHalveningChannel(guildId: string) {
       }
       await removeHalveningChannelId(guildId);
     }
-  } catch (error) {
-    console.error(`Error removing halvening channel in ${guildId}: ${error}`);
+  } catch (error: any) {
+    if (error.code === 10004) {
+      console.log(`Guild ${guildId} no longer exists, cleaning up Redis data`);
+      await removeHalveningChannelId(guildId);
+    } else {
+      console.error(`Error removing halvening channel in ${guildId}: ${error}`);
+    }
   }
 }
 
@@ -282,11 +332,11 @@ async function updateChannel(
     const botMember = await guild.members.fetch(client.user!.id);
     const permissions = botMember.permissions;
 
-    console.log(`Checking permissions for bot in ${guild.name}:`);
-    console.log(`- ManageChannels: ${permissions.has('ManageChannels')}`);
-    console.log(`- ViewChannel: ${permissions.has('ViewChannel')}`);
-    console.log(`- ManageRoles: ${permissions.has('ManageRoles')}`);
-    console.log(`- Bot role position: ${botMember.roles.highest.position}`);
+    debug(`Checking permissions for bot in ${guild.name}:`);
+    debug(`- ManageChannels: ${permissions.has('ManageChannels')}`);
+    debug(`- ViewChannel: ${permissions.has('ViewChannel')}`);
+    debug(`- ManageRoles: ${permissions.has('ManageRoles')}`);
+    debug(`- Bot role position: ${botMember.roles.highest.position}`);
 
     if (!permissions.has('ManageChannels')) {
       console.error(
@@ -305,7 +355,7 @@ async function updateChannel(
 
     // Check bot's role hierarchy position
     const botRolePosition = botMember.roles.highest.position;
-    console.log(`Bot's highest role position: ${botRolePosition}`);
+    debug(`Bot's highest role position: ${botRolePosition}`);
 
     if (botRolePosition === 0) {
       console.error(
@@ -322,7 +372,7 @@ async function updateChannel(
       channelGroup = (await guild.channels.fetch(
         channelGroupId
       )) as CategoryChannel;
-      console.log(
+      debug(
         `Successfully fetched channel group ${channelGroup.name} (${channelGroup.id}) in ${guild.name}`
       );
 
@@ -341,7 +391,7 @@ async function updateChannel(
       channelGroup = (await guild.channels.fetch(
         newChannelGroupId
       )) as CategoryChannel;
-      console.log(
+      debug(
         `Recreated channel group ${channelGroup.name} (${channelGroup.id}) in ${guild.name}`
       );
     }
@@ -362,23 +412,23 @@ async function updateChannel(
       try {
         const fetchedChannel = await guild.channels.fetch(channelId);
         if (!fetchedChannel) {
-          console.log(
+          debug(
             `Stored ${channelType} channel not found in ${guild.name}, will create new one`
           );
           channelId = undefined;
           await removeChannelId(guildId);
         } else {
-          console.log(
+          debug(
             `Successfully fetched ${channelType} channel: ${fetchedChannel.name} (${fetchedChannel.id}) in ${guild.name}`
           );
-          console.log(`- Channel type: ${fetchedChannel.type}`);
-          console.log(`- Current parent: ${fetchedChannel.parentId}`);
-          console.log(`- Target parent: ${channelGroup.id}`);
+          debug(`- Channel type: ${fetchedChannel.type}`);
+          debug(`- Current parent: ${fetchedChannel.parentId}`);
+          debug(`- Target parent: ${channelGroup.id}`);
 
           if ('position' in fetchedChannel) {
-            console.log(`- Current position: ${fetchedChannel.position}`);
+            debug(`- Current position: ${fetchedChannel.position}`);
           }
-          console.log(`- Target position: ${position}`);
+          debug(`- Target position: ${position}`);
 
           if (fetchedChannel.type !== ChannelType.GuildVoice) {
             console.error(
@@ -414,7 +464,7 @@ async function updateChannel(
             },
             {
               id: client.user!.id,
-              allow: ['ManageChannels', 'ViewChannel']
+              allow: ['ManageChannels', 'ViewChannel', 'Connect']
             }
           ]
         });
@@ -431,99 +481,89 @@ async function updateChannel(
     } else {
       // Update existing channel
       try {
-        // Check if channel is manageable
-        if (!channel.manageable) {
-          console.log(
-            `Channel not manageable in ${guild.name}, attempting to fix permissions...`
+        // Check if channel is manageable (should be manageable if created correctly)
+        if (channel && !channel.manageable) {
+          debug(
+            `Channel not manageable in ${guild.name}, this shouldn't happen with new channels. Removing from Redis and recreating...`
           );
-          try {
-            await channel.permissionOverwrites.create(client.user!.id, {
-              ManageChannels: true,
-              ViewChannel: true
-            });
-            console.log(
-              `Successfully updated permissions for ${channelType} channel in ${guild.name}`
-            );
-          } catch (permError) {
-            console.error(
-              `Failed to update permissions for ${channelType} channel in ${guild.name}:`,
-              permError
-            );
-            return;
-          }
+          await removeChannelId(guildId);
+          channel = null; // This will trigger channel recreation
         }
 
-        // Only update name if it's different
-        if (channel.name !== value) {
-          console.log(
-            `Updating ${channelType} channel name from "${channel.name}" to "${value}" in ${guild.name}`
-          );
-          try {
-            await channel.setName(value);
-            console.log(
-              `Successfully updated ${channelType} channel name in ${guild.name}`
+        // If channel was deleted, it will be recreated in the next section
+        if (channel) {
+          // Only update name if it's different
+          if (channel.name !== value) {
+            debug(
+              `Updating ${channelType} channel name from "${channel.name}" to "${value}" in ${guild.name}`
             );
-          } catch (nameError) {
-            console.error(
-              `Failed to update ${channelType} channel name in ${guild.name}:`,
-              nameError
+            try {
+              await channel.setName(value);
+              debug(
+                `Successfully updated ${channelType} channel name in ${guild.name}`
+              );
+            } catch (nameError) {
+              console.error(
+                `Failed to update ${channelType} channel name in ${guild.name}:`,
+                nameError
+              );
+              return; // Don't continue with other operations if name update fails
+            }
+          } else {
+            debug(
+              `${channelType} channel name already correct in ${guild.name}`
             );
-            return; // Don't continue with other operations if name update fails
           }
-        } else {
-          console.log(
-            `${channelType} channel name already correct in ${guild.name}`
-          );
-        }
 
-        // Only move to category if it's different and category exists
-        if (channel.parentId !== channelGroup.id) {
-          console.log(
-            `Moving ${channelType} channel from parent ${channel.parentId} to ${channelGroup.id} in ${guild.name}`
-          );
-          try {
-            await channel.edit({
-              parent: channelGroup.id
-            });
-            console.log(
-              `Successfully moved ${channelType} channel to category in ${guild.name}`
+          // Only move to category if it's different and category exists
+          if (channel.parentId !== channelGroup.id) {
+            debug(
+              `Moving ${channelType} channel from parent ${channel.parentId} to ${channelGroup.id} in ${guild.name}`
             );
-          } catch (moveError) {
-            console.error(
-              `Failed to move ${channelType} channel to category in ${guild.name}:`,
-              moveError
+            try {
+              await channel.edit({
+                parent: channelGroup.id
+              });
+              debug(
+                `Successfully moved ${channelType} channel to category in ${guild.name}`
+              );
+            } catch (moveError) {
+              console.error(
+                `Failed to move ${channelType} channel to category in ${guild.name}:`,
+                moveError
+              );
+              // Continue without moving the channel
+            }
+          } else {
+            debug(
+              `${channelType} channel already in correct category in ${guild.name}`
             );
-            // Continue without moving the channel
           }
-        } else {
-          console.log(
-            `${channelType} channel already in correct category in ${guild.name}`
-          );
-        }
 
-        // Only update position if it's different
-        if (channel.position !== position) {
-          console.log(
-            `Updating ${channelType} channel position from ${channel.position} to ${position} in ${guild.name}`
-          );
-          try {
-            await channel.edit({
-              position: position
-            });
-            console.log(
-              `Successfully updated ${channelType} channel position in ${guild.name}`
+          // Only update position if it's different
+          if (channel.position !== position) {
+            debug(
+              `Updating ${channelType} channel position from ${channel.position} to ${position} in ${guild.name}`
             );
-          } catch (positionError) {
-            console.error(
-              `Failed to update ${channelType} channel position in ${guild.name}:`,
-              positionError
+            try {
+              await channel.edit({
+                position: position
+              });
+              debug(
+                `Successfully updated ${channelType} channel position in ${guild.name}`
+              );
+            } catch (positionError) {
+              console.error(
+                `Failed to update ${channelType} channel position in ${guild.name}:`,
+                positionError
+              );
+              // Continue without updating position
+            }
+          } else {
+            debug(
+              `${channelType} channel already in correct position in ${guild.name}`
             );
-            // Continue without updating position
           }
-        } else {
-          console.log(
-            `${channelType} channel already in correct position in ${guild.name}`
-          );
         }
       } catch (editError) {
         console.error(
