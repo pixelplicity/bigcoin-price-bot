@@ -517,55 +517,10 @@ async function updateChannel(
             );
           }
 
-          // Only move to category if it's different and category exists
-          if (channel.parentId !== channelGroup.id) {
-            debug(
-              `Moving ${channelType} channel from parent ${channel.parentId} to ${channelGroup.id} in ${guild.name}`
-            );
-            try {
-              await channel.edit({
-                parent: channelGroup.id
-              });
-              debug(
-                `Successfully moved ${channelType} channel to category in ${guild.name}`
-              );
-            } catch (moveError) {
-              console.error(
-                `Failed to move ${channelType} channel to category in ${guild.name}:`,
-                moveError
-              );
-              // Continue without moving the channel
-            }
-          } else {
-            debug(
-              `${channelType} channel already in correct category in ${guild.name}`
-            );
-          }
-
-          // Only update position if it's different
-          if (channel.position !== position) {
-            debug(
-              `Updating ${channelType} channel position from ${channel.position} to ${position} in ${guild.name}`
-            );
-            try {
-              await channel.edit({
-                position: position
-              });
-              debug(
-                `Successfully updated ${channelType} channel position in ${guild.name}`
-              );
-            } catch (positionError) {
-              console.error(
-                `Failed to update ${channelType} channel position in ${guild.name}:`,
-                positionError
-              );
-              // Continue without updating position
-            }
-          } else {
-            debug(
-              `${channelType} channel already in correct position in ${guild.name}`
-            );
-          }
+          // Only update name - no parent or position changes
+          debug(
+            `${channelType} channel in correct category and position in ${guild.name}`
+          );
         }
       } catch (editError) {
         console.error(
