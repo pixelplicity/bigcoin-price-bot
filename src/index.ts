@@ -222,14 +222,20 @@ async function createChannelGroup(guildId: string): Promise<string> {
       throw new Error(`Bot has no roles in ${guild.name}`);
     }
 
+    const botRoleId = botMember.roles.highest.id;
+
     const channelGroup = await guild.channels.create({
       name: '🌕 BIGCOIN',
       type: ChannelType.GuildCategory,
       position: 0,
       permissionOverwrites: [
         {
-          id: client.user!.id,
-          allow: ['ManageChannels', 'ViewChannel', 'Connect']
+          id: guild.roles.everyone.id,
+          deny: ['Connect', 'Speak', 'Stream']
+        },
+        {
+          id: botRoleId,
+          allow: ['ViewChannel', 'ManageChannels', 'Connect']
         }
       ]
     });
