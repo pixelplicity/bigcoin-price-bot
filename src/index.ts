@@ -3,7 +3,8 @@ import {
   GatewayIntentBits,
   ChannelType,
   VoiceChannel,
-  CategoryChannel
+  CategoryChannel,
+  PermissionsBitField
 } from 'discord.js';
 import { CronJob } from 'cron';
 import axios from 'axios';
@@ -222,8 +223,6 @@ async function createChannelGroup(guildId: string): Promise<string> {
       throw new Error(`Bot has no roles in ${guild.name}`);
     }
 
-    const botRoleId = botMember.roles.highest.id;
-
     const channelGroup = await guild.channels.create({
       name: '🌕 BIGCOIN',
       type: ChannelType.GuildCategory,
@@ -231,11 +230,19 @@ async function createChannelGroup(guildId: string): Promise<string> {
       permissionOverwrites: [
         {
           id: guild.roles.everyone.id,
-          deny: ['Connect', 'Speak', 'Stream']
+          deny: [
+            PermissionsBitField.Flags.Connect,
+            PermissionsBitField.Flags.Speak,
+            PermissionsBitField.Flags.Stream
+          ]
         },
         {
-          id: botRoleId,
-          allow: ['ViewChannel', 'ManageChannels', 'Connect']
+          id: client.user!.id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.ManageChannels,
+            PermissionsBitField.Flags.Connect
+          ]
         }
       ]
     });
@@ -508,7 +515,11 @@ async function updateChannel(
           permissionOverwrites: [
             {
               id: client.user!.id,
-              allow: ['ViewChannel', 'ManageChannels', 'Connect']
+              allow: [
+                PermissionsBitField.Flags.ViewChannel,
+                PermissionsBitField.Flags.ManageChannels,
+                PermissionsBitField.Flags.Connect
+              ]
             }
           ]
         });
