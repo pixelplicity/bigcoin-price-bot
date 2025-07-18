@@ -225,26 +225,48 @@ async function createChannelGroup(guildId: string): Promise<string> {
 
     const channelGroup = await guild.channels.create({
       name: '🌕 BIGCOIN',
-      type: ChannelType.GuildCategory,
-      permissionOverwrites: [
-        {
-          id: guild.roles.everyone.id,
-          deny: [
-            PermissionsBitField.Flags.Connect,
-            PermissionsBitField.Flags.Speak,
-            PermissionsBitField.Flags.Stream
-          ]
-        },
-        {
-          id: client.user!.id,
-          allow: [
-            PermissionsBitField.Flags.ViewChannel,
-            PermissionsBitField.Flags.ManageChannels,
-            PermissionsBitField.Flags.Connect
-          ]
-        }
-      ]
+      type: ChannelType.GuildCategory
     });
+
+    console.log(`Created channel group in ${guild.name}`);
+
+    // 2) deny connect on @everyone
+    await channelGroup.permissionOverwrites.edit(guild.roles.everyone, {
+      Connect: false
+    });
+
+    console.log(`Deny connect on @everyone`);
+
+    // 3) explicitly allow your bot user to view & connect
+    await channelGroup.permissionOverwrites.edit(client.user!.id, {
+      ViewChannel: true,
+      Connect: true
+    });
+
+    console.log(`Allow bot user to view & connect`);
+
+    // const channelGroup = await guild.channels.create({
+    //   name: '🌕 BIGCOIN',
+    //   type: ChannelType.GuildCategory,
+    //   permissionOverwrites: [
+    //     {
+    //       id: guild.roles.everyone.id,
+    //       deny: [
+    //         PermissionsBitField.Flags.Connect,
+    //         PermissionsBitField.Flags.Speak,
+    //         PermissionsBitField.Flags.Stream
+    //       ]
+    //     },
+    //     {
+    //       id: client.user!.id,
+    //       allow: [
+    //         PermissionsBitField.Flags.ViewChannel,
+    //         PermissionsBitField.Flags.ManageChannels,
+    //         PermissionsBitField.Flags.Connect
+    //       ]
+    //     }
+    //   ]
+    // });
 
     await setChannelGroupId(guildId, channelGroup.id);
     console.log(`Successfully created channel group in ${guild.name}`);
