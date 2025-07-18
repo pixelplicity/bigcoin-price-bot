@@ -226,7 +226,6 @@ async function createChannelGroup(guildId: string): Promise<string> {
     const channelGroup = await guild.channels.create({
       name: '🌕 BIGCOIN',
       type: ChannelType.GuildCategory,
-      position: 0,
       permissionOverwrites: [
         {
           id: guild.roles.everyone.id,
@@ -511,17 +510,7 @@ async function updateChannel(
           name: value,
           type: ChannelType.GuildVoice,
           parent: channelGroup.id,
-          position: position,
-          permissionOverwrites: [
-            {
-              id: client.user!.id,
-              allow: [
-                PermissionsBitField.Flags.ViewChannel,
-                PermissionsBitField.Flags.ManageChannels,
-                PermissionsBitField.Flags.Connect
-              ]
-            }
-          ]
+          position: position
         });
 
         await setChannelId(guildId, newChannel.id);
