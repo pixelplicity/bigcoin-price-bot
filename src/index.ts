@@ -224,8 +224,9 @@ async function createChannelGroup(guildId: string): Promise<string> {
     }
 
     const channelGroup = await guild.channels.create({
-      name: '🌕 BIGCOIN',
-      type: ChannelType.GuildCategory
+      name: 'BIGCOIN ₿',
+      type: ChannelType.GuildCategory,
+      position: 0
     });
 
     console.log(`Created channel group in ${guild.name}`);
@@ -244,29 +245,6 @@ async function createChannelGroup(guildId: string): Promise<string> {
     });
 
     console.log(`Allow bot user to view & connect`);
-
-    // const channelGroup = await guild.channels.create({
-    //   name: '🌕 BIGCOIN',
-    //   type: ChannelType.GuildCategory,
-    //   permissionOverwrites: [
-    //     {
-    //       id: guild.roles.everyone.id,
-    //       deny: [
-    //         PermissionsBitField.Flags.Connect,
-    //         PermissionsBitField.Flags.Speak,
-    //         PermissionsBitField.Flags.Stream
-    //       ]
-    //     },
-    //     {
-    //       id: client.user!.id,
-    //       allow: [
-    //         PermissionsBitField.Flags.ViewChannel,
-    //         PermissionsBitField.Flags.ManageChannels,
-    //         PermissionsBitField.Flags.Connect
-    //       ]
-    //     }
-    //   ]
-    // });
 
     await setChannelGroupId(guildId, channelGroup.id);
     console.log(`Successfully created channel group in ${guild.name}`);
