@@ -197,21 +197,50 @@ async function updatePrice() {
 }
 
 async function createChannelGroup(guildId: string): Promise<string> {
-  const guild = await client.guilds.fetch(guildId);
-  const channelGroup = await guild.channels.create({
-    name: '🌕 BIGCOIN',
-    type: ChannelType.GuildCategory,
-    position: 0,
-    permissionOverwrites: [
-      {
-        id: client.user!.id,
-        allow: ['ManageChannels', 'ViewChannel', 'Connect']
-      }
-    ]
-  });
-  await setChannelGroupId(guildId, channelGroup.id);
-  console.log(`Created channel group in ${guild.name}`);
-  return channelGroup.id;
+  try {
+    const guild = await client.guilds.fetch(guildId);
+
+    // Check bot permissions before creating
+    const botMember = await guild.members.fetch(client.user!.id);
+    const permissions = botMember.permissions;
+
+    console.log(`Creating channel group in ${guild.name} (${guildId})`);
+    console.log(`Bot permissions in ${guild.name}:`);
+    console.log(`- ManageChannels: ${permissions.has('ManageChannels')}`);
+    console.log(`- ViewChannel: ${permissions.has('ViewChannel')}`);
+    console.log(`- ManageRoles: ${permissions.has('ManageRoles')}`);
+    console.log(`- Bot role position: ${botMember.roles.highest.position}`);
+    console.log(
+      `- Bot roles: ${botMember.roles.cache.map(r => r.name).join(', ')}`
+    );
+
+    if (!permissions.has('ManageChannels')) {
+      throw new Error(`Bot missing ManageChannels permission in ${guild.name}`);
+    }
+
+    if (botMember.roles.highest.position === 0) {
+      throw new Error(`Bot has no roles in ${guild.name}`);
+    }
+
+    const channelGroup = await guild.channels.create({
+      name: '🌕 BIGCOIN',
+      type: ChannelType.GuildCategory,
+      position: 0,
+      permissionOverwrites: [
+        {
+          id: client.user!.id,
+          allow: ['ManageChannels', 'ViewChannel', 'Connect']
+        }
+      ]
+    });
+
+    await setChannelGroupId(guildId, channelGroup.id);
+    console.log(`Successfully created channel group in ${guild.name}`);
+    return channelGroup.id;
+  } catch (error) {
+    console.error(`Failed to create channel group in guild ${guildId}:`, error);
+    throw error;
+  }
 }
 
 async function ensureChannelGroupExists(guildId: string): Promise<string> {
@@ -458,6 +487,13 @@ async function updateChannel(
     // If no channel exists, create one
     if (!channel) {
       try {
+        console.log(
+          `Creating ${channelType} channel in ${guild.name} under category ${channelGroup.name}`
+        );
+        console.log(
+          `Channel details: name="${value}", position=${position}, parent=${channelGroup.id}`
+        );
+
         const newChannel = await guild.channels.create({
           name: value,
           type: ChannelType.GuildVoice,
@@ -472,12 +508,18 @@ async function updateChannel(
         });
 
         await setChannelId(guildId, newChannel.id);
-        console.log(`Created ${channelType} channel in ${guild.name}`);
-      } catch (createError) {
-        console.error(
-          `Failed to create ${channelType} channel in ${guild.name}:`,
-          createError
+        console.log(
+          `Successfully created ${channelType} channel "${newChannel.name}" in ${guild.name}`
         );
+      } catch (createError: any) {
+        console.error(
+          `Failed to create ${channelType} channel in ${guild.name}:`
+        );
+        console.error(`- Error code: ${createError.code}`);
+        console.error(`- Error message: ${createError.message}`);
+        console.error(`- Guild ID: ${guildId}`);
+        console.error(`- Channel group ID: ${channelGroup.id}`);
+        console.error(`- Bot user ID: ${client.user!.id}`);
         throw createError;
       }
     } else {
@@ -549,10 +591,37 @@ client.once('ready', async () => {
 });
 
 client.on('guildCreate', async guild => {
-  const { price, blocksUntilHalving } = await getStats();
-  await updatePriceChannel(guild.id, price);
-  await updateHalveningChannel(guild.id, blocksUntilHalving);
-  await addGuild(guild.id);
+  try {
+    console.log(`Bot added to guild: ${guild.name} (${guild.id})`);
+
+    // Check bot permissions immediately
+    const botMember = await guild.members.fetch(client.user!.id);
+    const permissions = botMember.permissions;
+
+    console.log(`Initial bot permissions in ${guild.name}:`);
+    console.log(`- ManageChannels: ${permissions.has('ManageChannels')}`);
+    console.log(`- ViewChannel: ${permissions.has('ViewChannel')}`);
+    console.log(`- Bot role position: ${botMember.roles.highest.position}`);
+    console.log(
+      `- Bot roles: ${botMember.roles.cache.map(r => r.name).join(', ')}`
+    );
+
+    if (!permissions.has('ManageChannels')) {
+      console.error(
+        `Bot missing ManageChannels permission in ${guild.name}. Cannot create channels.`
+      );
+      return;
+    }
+
+    const { price, blocksUntilHalving } = await getStats();
+    await updatePriceChannel(guild.id, price);
+    await updateHalveningChannel(guild.id, blocksUntilHalving);
+    await addGuild(guild.id);
+
+    console.log(`Successfully set up channels in ${guild.name}`);
+  } catch (error) {
+    console.error(`Failed to set up channels in guild ${guild.id}:`, error);
+  }
 });
 
 client.on('guildDelete', async guild => {
