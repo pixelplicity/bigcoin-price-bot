@@ -188,12 +188,19 @@ async function updatePrice() {
       blocksUntilHalving
     )} blocks for ${guilds.length} guilds`
   );
+  console.log(`Guild IDs: ${guilds.join(', ')}`);
   if (guilds.length === 0) {
     return;
   }
   for (const guildId of guilds) {
-    await updatePriceChannel(guildId, price);
-    await updateHalveningChannel(guildId, blocksUntilHalving);
+    try {
+      console.log(`Processing guild ${guildId}...`);
+      await updatePriceChannel(guildId, price);
+      await updateHalveningChannel(guildId, blocksUntilHalving);
+      console.log(`Successfully updated guild ${guildId}`);
+    } catch (error) {
+      console.error(`Failed to update guild ${guildId}:`, error);
+    }
   }
 }
 
@@ -373,6 +380,9 @@ async function updateChannel(
   position: number
 ) {
   try {
+    console.log(
+      `Starting updateChannel for ${channelType} channel in guild ${guildId}`
+    );
     const guild = await client.guilds.fetch(guildId);
 
     // Comprehensive bot permissions check
@@ -568,6 +578,9 @@ async function updateChannel(
         throw editError;
       }
     }
+    console.log(
+      `Successfully completed updateChannel for ${channelType} channel in guild ${guildId}`
+    );
   } catch (error) {
     console.error(
       `Error updating ${channelType} channel in ${guildId}: ${error}`
